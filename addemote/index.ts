@@ -353,6 +353,7 @@ const plugin: PluginFactory = (api) => {
     name: 'Add Emote',
     version: '0.2.0',
     author: 'UVClay',
+    repo: 'https://github.com/bitrot-cafe/bitbot-plugins',
     description: 'Search 7TV and add emotes to the guild, with compression, splitting for wide emotes, and a rename step.',
     commands: [addemote],
   };

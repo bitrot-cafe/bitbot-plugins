@@ -228,6 +228,7 @@ const plugin: PluginFactory = (bot) => {
     name: 'Access Sync',
     version: '0.1.0',
     author: 'UVClay',
+    repo: 'https://github.com/bitrot-cafe/bitbot-plugins',
     description: 'Disables Nextcloud accounts when the Central access role is lost, and re-enables them when it returns.',
     commands: [access],
     setup: (ctx) => {
