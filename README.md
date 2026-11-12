@@ -29,6 +29,9 @@ The API is the `BotAPI` type in bitbot's `src/plugin.ts`.
 
 - **Dependencies:** give the plugin its own `package.json` with `"type": "module"`. The bot runs
   `npm install --omit=dev` in it when the repo is added or the file changes.
+- **Declare the bot API version** the plugin needs, in its `package.json`: `"bitbot": { "api": "1.0" }`
+  (1.0 or later, not 2.0). Incompatible plugins aren't loaded, and undeclared ones load with a warning.
+  See bitbot's README, "Plugin API versions".
 - **Command names must be unique** across every plugin the bot loads. If two plugins claim the same
   command, or share a folder name, the bot disables **both**, so the clash gets noticed.
 

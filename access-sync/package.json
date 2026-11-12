@@ -1,5 +1,8 @@
 {
   "name": "bitbot-plugin-access-sync",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "bitbot": {
+    "api": "1.0"
+  }
 }

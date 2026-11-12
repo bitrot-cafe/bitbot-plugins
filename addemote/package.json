@@ -4,5 +4,8 @@
   "type": "module",
   "dependencies": {
     "sharp": "^0.35.5"
+  },
+  "bitbot": {
+    "api": "1.0"
   }
 }
