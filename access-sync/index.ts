@@ -2,27 +2,40 @@
 // Losing the role (or leaving) disables the account, which also kills its open sessions and app
 // passwords; regaining it re-enables only accounts this plugin disabled. See sync.ts for the rules.
 import type { Client, Guild, GuildMember } from '@fluxerjs/core';
-import type { BotAPI, Command, Logger, PluginFactory } from 'bitbot';
+import type { BotAPI, Command, Logger, PluginConfig, PluginFactory, SettingDef } from 'bitbot';
 import { NextcloudTarget, type AccessTarget } from './nextcloud.js';
 import { decide, maxSuspensions, memberListProblem, plan, type Verdict } from './sync.js';
 
-// ---- Config (plugin-owned env; secrets live in .env) ----------------------------------------------
+// ---- Config (declared settings: stored in the bot's database, editable with !admin config access-sync) --
 
-const env = process.env;
-const cfg = {
-  guildId: env.CENTRAL_GUILD_ID ?? '',
-  roleId: env.NC_ROLE_ID ?? '',
-  url: env.NEXTCLOUD_URL ?? '',
-  user: env.NEXTCLOUD_USER || 'fluxer-sync',
-  appPassword: env.NEXTCLOUD_APP_PASSWORD ?? '',
-  group: env.NEXTCLOUD_GROUP || 'fluxer',
-  markerGroup: env.NEXTCLOUD_SUSPENDED_GROUP || 'fluxer-suspended',
-  intervalMin: Number(env.ACCESS_SYNC_INTERVAL_MIN) || 60,
-  dryRun: env.ACCESS_SYNC_DRY_RUN !== 'false', // dry run unless explicitly turned off
+// Each can be pinned by an env variable named ACCESS_SYNC_<KEY> (e.g. ACCESS_SYNC_DRY_RUN), which wins over
+// the database. The app password is a secret: ACCESS_SYNC_NEXTCLOUD_APP_PASSWORD(_FILE) only. Connection
+// settings apply after a restart; the rest at once.
+const settings: Record<string, SettingDef> = {
+  guild_id: { type: 'id', description: 'The Central guild whose role grants access.', required: true },
+  role_id: { type: 'id', description: 'The role that grants Nextcloud access.', required: true },
+  nextcloud_url: { type: 'url', description: 'Public https URL of Nextcloud.', required: true, restart: true },
+  nextcloud_user: { type: 'string', description: 'Nextcloud service user (group admin of the groups below).', default: 'fluxer-sync', restart: true },
+  nextcloud_app_password: { type: 'string', description: "The service user's app password.", required: true, secret: true, restart: true },
+  group: { type: 'string', description: 'Nextcloud group of Fluxer-login users (the only accounts touched).', default: 'fluxer', restart: true },
+  suspended_group: { type: 'string', description: 'Marker group for accounts this plugin disabled.', default: 'fluxer-suspended', restart: true },
+  interval_min: { type: 'number', description: 'Minutes between full reconciles.', default: 60, restart: true },
+  dry_run: { type: 'boolean', description: 'Log what would change instead of changing it.', default: true },
 };
-const missing = (['CENTRAL_GUILD_ID', 'NC_ROLE_ID', 'NEXTCLOUD_URL', 'NEXTCLOUD_APP_PASSWORD'] as const).filter(
-  (key) => !env[key],
-);
+
+let conf: PluginConfig; // bot.config, set by the factory (before any command or setup can run)
+const cfg = {
+  get guildId() { return conf.get<string>('guild_id') ?? ''; },
+  get roleId() { return conf.get<string>('role_id') ?? ''; },
+  get url() { return conf.get<string>('nextcloud_url') ?? ''; },
+  get user() { return conf.get<string>('nextcloud_user') ?? 'fluxer-sync'; },
+  get appPassword() { return conf.get<string>('nextcloud_app_password') ?? ''; },
+  get group() { return conf.get<string>('group') ?? 'fluxer'; },
+  get markerGroup() { return conf.get<string>('suspended_group') ?? 'fluxer-suspended'; },
+  get intervalMin() { return conf.get<number>('interval_min') ?? 60; },
+  get dryRun() { return conf.get<boolean>('dry_run') ?? true; },
+};
+const missingList = () => conf.missing().join(', ');
 
 // ---- State ----------------------------------------------------------------------------------------
 
@@ -91,7 +104,7 @@ type Result = { aborted?: string; members?: number; managed?: number; suspend?: 
 
 /** Compare everyone the target manages against the full member list. Refuses to act on bad data. */
 async function reconcile(trigger: string): Promise<Result> {
-  if (!target) return { aborted: `not configured (missing ${missing.join(', ')})` };
+  if (!target) return { aborted: `not configured (missing ${missingList()})` };
   if (reconciling) return { aborted: 'a reconcile is already running' };
   reconciling = true;
   const abort = (why: string): Result => {
@@ -100,7 +113,7 @@ async function reconcile(trigger: string): Promise<Result> {
   };
   try {
     const guild = await centralGuild();
-    if (!guild) return abort("the bot isn't in the Central guild (CENTRAL_GUILD_ID)");
+    if (!guild) return abort("the bot isn't in the Central guild (setting guild_id)");
 
     // Whole member list, fresh (not the cache). Any failure means we don't act.
     const members = new Map<string, { name: string; hasRole: boolean }>();
@@ -169,7 +182,8 @@ function listen() {
 
 const plugin: PluginFactory = (bot) => {
   fluxer = bot.fluxer;
-  const { prefix } = bot;
+  conf = bot.config;
+  log = bot.log;
   const syncCmd: Command = {
     name: 'sync',
     description: 'Run a reconcile now and report what it did.',
@@ -187,10 +201,11 @@ const plugin: PluginFactory = (bot) => {
     name: 'check',
     description: 'Compare one user\'s role with their account state.',
     usage: '<@user|id>',
-    run: async (message, [arg]) => {
+    run: async (message, [arg], _rest, ctx) => {
       const uid = arg ? (fluxer.parseUserMention(arg) ?? (/^\d+$/.test(arg) ? arg : null)) : null;
-      if (!uid) return message.reply(`Usage: \`${prefix}access check <@user|id>\``);
-      if (!target) return message.reply(`Access sync isn't configured (missing ${missing.join(', ')}).`);
+      const prefix = ctx.prefix;
+      if (!uid) return ctx.usage();
+      if (!target) return message.reply(`Access sync isn't configured (missing ${missingList()}); see \`${prefix}admin config access-sync\`.`);
       const guild = await centralGuild();
       const member = guild ? await guild.members.fetch(uid).catch(() => null) : null;
       const want = member ? hasRole(member) : false;
@@ -220,7 +235,7 @@ const plugin: PluginFactory = (bot) => {
   const access: Command = {
     name: 'access',
     description: 'Nextcloud access sync (follows a Central guild role).',
-    botAdminOnly: true,
+    requiredRole: 'admin', // mounted as !admin access
     subcommands: [syncCmd, checkCmd],
   };
 
@@ -231,10 +246,11 @@ const plugin: PluginFactory = (bot) => {
     repo: 'https://github.com/bitrot-cafe/bitbot-plugins',
     description: 'Disables Nextcloud accounts when the Central access role is lost, and re-enables them when it returns.',
     commands: [access],
+    config: settings,
     setup: (ctx) => {
       client = ctx.client;
-      log = ctx.log;
-      if (missing.length) return log.warn(`Access sync is off: missing ${missing.join(', ')}`);
+      const missing = conf.missing();
+      if (missing.length) return log.warn(`Access sync is off: missing ${missing.join(', ')} (see !admin config access-sync)`);
       target = new NextcloudTarget({ url: cfg.url, user: cfg.user, appPassword: cfg.appPassword, group: cfg.group, markerGroup: cfg.markerGroup });
       listen();
       log.info(`Access sync on${cfg.dryRun ? ' (DRY RUN: logging only)' : ''}, reconciling every ${cfg.intervalMin} min`);

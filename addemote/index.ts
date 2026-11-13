@@ -7,7 +7,6 @@ import type { BotAPI, Command, Logger, PluginFactory } from 'bitbot';
 // Filled in by the factory below (the bot passes its helpers in at load time).
 let bot: BotAPI;
 let log: Logger;
-let prefix: string;
 
 type Emote = { id: string; name: string; animated: boolean; owner: string; width: number; height: number };
 
@@ -207,12 +206,12 @@ const addemote: Command = {
   usage: '<search> [source]',
   botPermissions: ['EmbedLinks', 'AddReactions', 'ManageMessages', 'CreateExpressions'],
   userPermissions: ['CreateExpressions'],
-  run: async (message, args) => {
+  run: async (message, args, _rest, ctx) => {
     const [query, sourceName = '7tv'] = args;
     if (!message.guildId) return message.reply('This only works in a server.');
-    if (!query) return message.reply(`Usage: \`${prefix}addemote <search> [source]\` (sources: 7tv)`);
+    if (!query) return ctx.usage('Sources: 7tv');
     const source = SOURCES[sourceName.toLowerCase()];
-    if (!source) return message.reply(`Unknown source "${sourceName}". Available: ${Object.keys(SOURCES).join(', ')}`);
+    if (!source) return ctx.usage(`Unknown source "${sourceName}". Sources: ${Object.keys(SOURCES).join(', ')}`);
 
     const results = await source(query);
     if (results.length === 0) return message.reply(`No emotes found for "${query}".`);
@@ -322,7 +321,7 @@ const addemote: Command = {
       if (reply.channelId !== message.channelId || reply.author.id !== message.author.id) return;
       resetIdle();
       const raw = reply.content.trim();
-      if (raw.startsWith(prefix)) return; // a command, not a name
+      if (raw.startsWith(bot.prefixFor(message.guildId))) return; // a command, not a name
       reply.delete().catch(() => {}); // keep the channel tidy; needs Manage messages
       if (!/^[A-Za-z0-9_]{2,32}$/.test(raw)) {
         await menu.edit({ content: `"${raw}" isn't a valid name. Use letters, numbers and underscores, 2–32 characters. Try again:` });
@@ -347,7 +346,6 @@ const addemote: Command = {
 
 const plugin: PluginFactory = (api) => {
   bot = api;
-  prefix = api.prefix;
   log = api.createLogger('addemote');
   return {
     name: 'Add Emote',
