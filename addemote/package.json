@@ -1,11 +1,17 @@
 {
   "name": "bitbot-plugin-addemote",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "description": "Search 7TV and add emotes to the guild, with compression, splitting for wide emotes, and a rename step.",
+  "author": "UVClay",
+  "repository": "https://github.com/bitrot-cafe/bitbot-plugins",
   "dependencies": {
     "sharp": "^0.35.5"
   },
   "bitbot": {
-    "api": "0.3"
+    "api": "0.4",
+    "id": "addemote",
+    "title": "Add Emote"
   }
 }

@@ -2,26 +2,16 @@
 // Losing the role (or leaving) disables the account, which also kills its open sessions and app
 // passwords; regaining it re-enables only accounts this plugin disabled. See sync.ts for the rules.
 import type { Client, Guild, GuildMember } from '@fluxerjs/core';
-import type { BotAPI, Command, Logger, PluginConfig, PluginFactory, SettingDef } from 'bitbot';
+import type { BotAPI, Command, Logger, PluginConfig, PluginFactory } from 'bitbot';
 import { NextcloudTarget, type AccessTarget } from './nextcloud.js';
 import { decide, maxSuspensions, memberListProblem, plan, type Verdict } from './sync.js';
 
 // ---- Config (declared settings: stored in the bot's database, editable with !admin config access-sync) --
 
-// Each can be pinned by an env variable named ACCESS_SYNC_<KEY> (e.g. ACCESS_SYNC_DRY_RUN), which wins over
-// the database. The app password is a secret: ACCESS_SYNC_NEXTCLOUD_APP_PASSWORD(_FILE) only. Connection
-// settings apply after a restart; the rest at once.
-const settings: Record<string, SettingDef> = {
-  guild_id: { type: 'id', description: 'The Central guild whose role grants access.', required: true },
-  role_id: { type: 'id', description: 'The role that grants Nextcloud access.', required: true },
-  nextcloud_url: { type: 'url', description: 'Public https URL of Nextcloud.', required: true, restart: true },
-  nextcloud_user: { type: 'string', description: 'Nextcloud service user (group admin of the groups below).', default: 'fluxer-sync', restart: true },
-  nextcloud_app_password: { type: 'string', description: "The service user's app password.", required: true, secret: true, restart: true },
-  group: { type: 'string', description: 'Nextcloud group of Fluxer-login users (the only accounts touched).', default: 'fluxer', restart: true },
-  suspended_group: { type: 'string', description: 'Marker group for accounts this plugin disabled.', default: 'fluxer-suspended', restart: true },
-  interval_min: { type: 'number', description: 'Minutes between full reconciles.', default: 60, restart: true },
-  dry_run: { type: 'boolean', description: 'Log what would change instead of changing it.', default: true },
-};
+// Declared in package.json ("bitbot.config"). Each can be pinned by an env variable named
+// ACCESS_SYNC_<KEY> (e.g. ACCESS_SYNC_DRY_RUN), which wins over the database. The app password is a
+// secret: ACCESS_SYNC_NEXTCLOUD_APP_PASSWORD(_FILE) only. Connection settings apply after a restart; the
+// rest at once.
 
 let conf: PluginConfig; // bot.config, set by the factory (before any command or setup can run)
 const cfg = {
@@ -240,13 +230,7 @@ const plugin: PluginFactory = (bot) => {
   };
 
   return {
-    name: 'Access Sync',
-    version: '0.1.0',
-    author: 'UVClay',
-    repo: 'https://github.com/bitrot-cafe/bitbot-plugins',
-    description: 'Disables Nextcloud accounts when the Central access role is lost, and re-enables them when it returns.',
     commands: [access],
-    config: settings,
     setup: (ctx) => {
       client = ctx.client;
       const missing = conf.missing();

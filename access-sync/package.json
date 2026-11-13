@@ -1,8 +1,68 @@
 {
   "name": "bitbot-plugin-access-sync",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Disables Nextcloud accounts when the Central access role is lost, and re-enables them when it returns.",
+  "author": "UVClay",
+  "repository": "https://github.com/bitrot-cafe/bitbot-plugins",
   "bitbot": {
-    "api": "0.3"
+    "api": "0.4",
+    "id": "access-sync",
+    "title": "Access Sync",
+    "config": {
+      "guild_id": {
+        "type": "id",
+        "description": "The Central guild whose role grants access.",
+        "required": true
+      },
+      "role_id": {
+        "type": "id",
+        "description": "The role that grants Nextcloud access.",
+        "required": true
+      },
+      "nextcloud_url": {
+        "type": "url",
+        "description": "Public https URL of Nextcloud.",
+        "required": true,
+        "restart": true
+      },
+      "nextcloud_user": {
+        "type": "string",
+        "description": "Nextcloud service user (group admin of the groups below).",
+        "default": "fluxer-sync",
+        "restart": true
+      },
+      "nextcloud_app_password": {
+        "type": "string",
+        "description": "The service user's app password.",
+        "required": true,
+        "secret": true,
+        "restart": true
+      },
+      "group": {
+        "type": "string",
+        "description": "Nextcloud group of Fluxer-login users (the only accounts touched).",
+        "default": "fluxer",
+        "restart": true
+      },
+      "suspended_group": {
+        "type": "string",
+        "description": "Marker group for accounts this plugin disabled.",
+        "default": "fluxer-suspended",
+        "restart": true
+      },
+      "interval_min": {
+        "type": "number",
+        "description": "Minutes between full reconciles.",
+        "default": 60,
+        "restart": true
+      },
+      "dry_run": {
+        "type": "boolean",
+        "description": "Log what would change instead of changing it.",
+        "default": true
+      }
+    }
   }
 }
